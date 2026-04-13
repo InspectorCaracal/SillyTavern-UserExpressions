@@ -1,0 +1,64 @@
+<div class="user-expressions-settings">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>User Expressions</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+            <div class="user-expressions-controls">
+                <label class="checkbox_label flex-container">
+                    <input type="checkbox" id="user-expressions-enabled" />
+                    <span>Enable User Expressions</span>
+                </label>
+                
+                <label class="checkbox_label flex-container">
+                    <input type="checkbox" id="user-expressions-show-in-chat" />
+                    <span>Show expressions on user messages</span>
+                </label>
+                
+                <label class="checkbox_label flex-container">
+                    <input type="checkbox" id="user-expressions-auto-update" />
+                    <span>Auto-update expression on new messages</span>
+                </label>
+            </div>
+
+            <hr class="sysHR">
+
+            <div class="user-expressions-current-persona">
+                <h4>Current Persona</h4>
+                <div id="user-expressions-persona-info">
+                    <span class="persona-name">No persona selected</span>
+                </div>
+                <div id="user-expressions-current-preview" class="expression-preview hidden">
+                    <img src="" alt="Current expression" />
+                </div>
+            </div>
+
+            <hr class="sysHR">
+
+            <div class="user-expressions-sprites">
+                <h4>Expression Sprites</h4>
+                <div id="user-expressions-sprite-list">
+                    <div class="no-sprites-message">No sprites uploaded yet.</div>
+                </div>
+                <div class="user-expressions-upload-controls">
+                    <input type="file" id="user-expressions-file-input" accept="image/*" class="hidden" />
+                    <button id="user-expressions-upload-btn" class="menu_button">Upload Expression</button>
+                    <button id="user-expressions-refresh-btn" class="menu_button">Refresh</button>
+                </div>
+            </div>
+
+            <hr class="sysHR">
+
+            <div class="user-expressions-help">
+                <h4>Quick Guide</h4>
+                <ul>
+                    <li>Expressions are stored per persona</li>
+                    <li>Upload sprites with expression names (e.g., "joy.png", "sadness.png")</li>
+                    <li>Sprites are automatically applied when you send messages</li>
+                    <li>Expressions will appear in the regular expressions panel</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
