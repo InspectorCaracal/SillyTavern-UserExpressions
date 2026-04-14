@@ -20,6 +20,21 @@
                     <input type="checkbox" id="user-expressions-auto-update" />
                     <span>Auto-update expression on new messages</span>
                 </label>
+                
+                <label class="checkbox_label flex-container">
+                    <input type="checkbox" id="user-expressions-simulate-streaming" />
+                    <span>Simulate streaming on user messages</span>
+                </label>
+                
+                <div class="user-expressions-stream-speed hidden" id="stream-speed-control">
+                    <label for="user-expressions-stream-speed">Stream speed:</label>
+                    <select id="user-expressions-stream-speed">
+                        <option value="100">Slow</option>
+                        <option value="50" selected>Normal</option>
+                        <option value="25">Fast</option>
+                        <option value="10">Very Fast</option>
+                    </select>
+                </div>
             </div>
 
             <hr class="sysHR">

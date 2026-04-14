@@ -185,6 +185,26 @@
     font-size: 0.9em;
 }
 
+/* Stream speed control */
+.user-expressions-stream-speed {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    margin-left: 20px;
+}
+
+.user-expressions-stream-speed label {
+    font-size: 0.85em;
+    font-weight: bold;
+}
+
+.user-expressions-stream-speed select {
+    min-width: 100px;
+    padding: 2px 4px;
+    font-size: 0.85em;
+}
+
 /* HR spacing */
 .sysHR {
     margin: 10px 0;

@@ -12,6 +12,7 @@ import { debounce_timeout } from "../../../constants.js";
 import { SlashCommandParser } from "../../../slash-commands/SlashCommandParser.js";
 import { SlashCommand } from "../../../slash-commands/SlashCommand.js";
 import { ARGUMENT_TYPE, SlashCommandArgument } from "../../../slash-commands/SlashCommandArgument.js";
+import { initStreaming, queueForStreaming, isCurrentlyStreaming, cancelStreaming } from "./streaming.js";
 
 // Module name for logging
 const MODULE_NAME = 'user-expressions';
@@ -74,7 +75,9 @@ const DEFAULT_SETTINGS = {
     autoUpdate: true,
     logLevel: LOG_LEVELS.INFO,
     personaFolderMap: {},
-    currentExpression: {}
+    currentExpression: {},
+    simulateStreaming: false,
+    streamSpeed: 50
 };
 
 // State
@@ -515,7 +518,38 @@ async function initSettingsPanel() {
         saveSettingsDebounced();
         logger.info('Auto-update:', settings.autoUpdate);
     });
-    
+
+    // Streaming settings
+    const streamingCheckbox = document.getElementById('user-expressions-simulate-streaming');
+    const streamSpeedControl = document.getElementById('stream-speed-control');
+    const streamSpeedSelect = document.getElementById('user-expressions-stream-speed');
+
+    if (streamingCheckbox) {
+        streamingCheckbox.checked = settings.simulateStreaming || false;
+        streamingCheckbox.addEventListener('change', (e) => {
+            settings.simulateStreaming = e.target.checked;
+            saveSettingsDebounced();
+            logger.info('Simulate streaming:', settings.simulateStreaming);
+            // Show/hide stream speed control
+            if (streamSpeedControl) {
+                streamSpeedControl.classList.toggle('hidden', !e.target.checked);
+            }
+        });
+    }
+
+    if (streamSpeedSelect) {
+        streamSpeedSelect.value = String(settings.streamSpeed || 50);
+        streamSpeedSelect.addEventListener('change', (e) => {
+            settings.streamSpeed = parseInt(e.target.value);
+            saveSettingsDebounced();
+            logger.info('Stream speed:', settings.streamSpeed);
+        });
+        // Show/hide based on current setting
+        if (streamSpeedControl) {
+            streamSpeedControl.classList.toggle('hidden', !settings.simulateStreaming);
+        }
+    }
+
     // Upload button
     document.getElementById('user-expressions-upload-btn').addEventListener('click', () => {
         document.getElementById('user-expressions-file-input').click();
@@ -585,7 +619,69 @@ async function init() {
     // Register slash commands
     registerSlashCommands();
     
+    // Initialize streaming module
+    initStreaming(logger);
+
+    // Expose function globally for streaming module
+    window.updateUserExpression = async (expression) => {
+        await setUserExpression(expression);
+    };
+
+    // Set up send interception for streaming simulation
+    setupSendInterception();
+
     logger.info('User Expressions extension initialized successfully');
+}
+
+/**
+ * Set up send button interception for streaming
+ */
+function setupSendInterception() {
+    const sendButton = document.getElementById('send_but');
+    const textarea = document.getElementById('send_textarea');
+
+    if (!sendButton || !textarea) {
+        logger.warn('Send button or textarea not found, streaming interception disabled');
+        return;
+    }
+
+    // Store original click handler
+    const originalOnClick = sendButton.onclick;
+
+    // Override send button click
+    sendButton.onclick = async (e) => {
+        const settings = extension_settings.userExpressions;
+        const messageText = textarea.value.trim();
+
+        // Check if streaming is enabled and queue the message
+        if (settings.simulateStreaming && messageText.length >= 5) {
+            logger.info('Queueing message for streaming simulation');
+            queueForStreaming(messageText);
+        }
+
+        // Always proceed with normal flow
+        if (originalOnClick) {
+            return originalOnClick.call(sendButton, e);
+        }
+    };
+
+    // Also intercept Enter key in textarea
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            const settings = extension_settings.userExpressions;
+            const messageText = textarea.value.trim();
+
+            // Check if streaming is enabled and queue the message
+            if (settings.simulateStreaming && messageText.length >= 5) {
+                logger.info('Queueing message for streaming simulation (Enter key)');
+                queueForStreaming(messageText);
+            }
+
+            // Let normal flow continue
+        }
+    });
+
+    logger.info('Send interception set up for streaming');
 }
 
 /**
@@ -648,7 +744,22 @@ function registerSlashCommands() {
         helpString: 'Refresh the user expressions list.',
         returns: 'Success message'
     }));
-    
+
+    // Stop streaming command
+    SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+        name: 'stop-streaming',
+        aliases: ['stopuserstream', 'cancelstream'],
+        callback: async () => {
+            if (isCurrentlyStreaming()) {
+                cancelStreaming();
+                return 'Streaming cancelled';
+            }
+            return 'No active streaming to cancel';
+        },
+        helpString: 'Stop/cancel the current user message streaming.',
+        returns: 'Status message'
+    }));
+
     logger.info('Slash commands registered');
 }
 
