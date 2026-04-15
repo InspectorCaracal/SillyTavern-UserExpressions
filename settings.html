@@ -1,4 +1,4 @@
-<div class="user-expressions-settings">
+<div id="user-expressions-settings" class="extension_container">
     <div class="inline-drawer">
         <div class="inline-drawer-toggle inline-drawer-header">
             <b>User Expressions</b>
@@ -26,33 +26,30 @@
                     <span>Simulate streaming on user messages</span>
                 </label>
                 
-                <div class="user-expressions-stream-speed hidden" id="stream-speed-control">
-                    <label for="user-expressions-stream-speed">Stream speed:</label>
-                    <select id="user-expressions-stream-speed">
-                        <option value="100">Slow</option>
-                        <option value="50" selected>Normal</option>
-                        <option value="25">Fast</option>
-                        <option value="10">Very Fast</option>
-                    </select>
-                </div>
-            </div>
-
-            <hr class="sysHR">
-
-            <div class="user-expressions-current-persona">
-                <h4>Current Persona</h4>
-                <div id="user-expressions-persona-info">
-                    <span class="persona-name">No persona selected</span>
-                </div>
-                <div id="user-expressions-current-preview" class="expression-preview hidden">
-                    <img src="" alt="Current expression" />
+                <div class="user-expressions-stream-controls hidden" id="stream-controls">
+                    <div class="user-expressions-stream-speed">
+                        <label for="user-expressions-stream-speed">Stream speed:</label>
+                        <select id="user-expressions-stream-speed">
+                            <option value="100">Slow</option>
+                            <option value="50" selected>Normal</option>
+                            <option value="25">Fast</option>
+                            <option value="10">Very Fast</option>
+                        </select>
+                    </div>
+                    
+                    <div class="user-expressions-stream-delay">
+                        <label for="user-expressions-stream-delay">Generation delay (ms):</label>
+                        <input type="number" class="text_pole" id="user-expressions-stream-delay" min="0" max="5000" step="100" value="0" />
+                    </div>
                 </div>
             </div>
 
             <hr class="sysHR">
 
             <div class="user-expressions-sprites">
-                <h4>Expression Sprites</h4>
+                <h3 id="user-expressions-sprite-header">
+                    <strong>Sprite set:</strong>&nbsp;<span id="user-expressions-persona-name">No persona selected</span>
+                </h3>
                 <div id="user-expressions-sprite-list">
                     <div class="no-sprites-message">No sprites uploaded yet.</div>
                 </div>

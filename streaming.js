@@ -144,6 +144,7 @@ function updateMessageDisplay(messageId, text) {
 async function startStreaming(messageId, fullMessage) {
     const settings = getSettings();
     const streamSpeed = settings.streamSpeed || DEFAULT_STREAM_SPEED;
+    const streamDelay = settings.streamDelay || 0;
     const charsPerTick = Math.max(1, Math.floor(50 / streamSpeed));
 
     isStreaming = true;
@@ -154,6 +155,17 @@ async function startStreaming(messageId, fullMessage) {
     if (context.chat[messageId]) {
         context.chat[messageId].extra = context.chat[messageId].extra || {};
         context.chat[messageId].extra.originalFullText = fullMessage;
+    }
+
+    // Apply delay before starting streaming
+    if (streamDelay > 0) {
+        logger?.info(`Delaying streaming for ${streamDelay}ms`);
+        await new Promise(resolve => setTimeout(resolve, streamDelay));
+        // Check if streaming was cancelled during delay
+        if (!isStreaming) {
+            logger?.info('Streaming cancelled during delay');
+            return false;
+        }
     }
 
     // Show the existing stop button (it should already be visible during generation)

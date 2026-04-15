@@ -2,12 +2,15 @@
 
 A SillyTavern extension that adds expression sprites for user personas, parallel to the existing Character Expressions extension.
 
+## NOTE
+
+I made this with Kimi and didn't bother to code review the result so who knows right. If you decide to go dig in, bring your favorite pasta sauce.
+
 ## Features
 
 - **Per-Persona Expression Sets**: Each persona gets its own expression folder
 - **Automatic Expression Classification**: Messages are automatically classified and expressions updated
 - **Manual Expression Control**: Set expressions manually via UI or slash commands
-- **Debug Logging**: Configurable log levels for troubleshooting
 - **Full Upload Support**: Upload expressions directly through the UI
 - **Integration with Expressions Extension**: Uses the same display mechanism as character expressions
 
@@ -111,4 +114,3 @@ This extension relies on the built-in Expressions extension and uses:
 - Persona folders are prefixed with `__user__` to avoid collisions with real characters
 - The extension automatically creates folders on first upload
 - Expression classification uses the same settings as character expressions
-- State is persisted in `extension_settings.userExpressions`

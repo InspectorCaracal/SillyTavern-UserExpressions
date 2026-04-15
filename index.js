@@ -29,16 +29,16 @@ const LOG_LEVELS = {
     VERBOSE: 4
 };
 
+const CURRENT_LOG_LEVEL = LOG_LEVELS.INFO;
+
 /**
  * Debug logging utility
  * Usage: log(level, message, ...args)
- * Set extension_settings.userExpressions.logLevel to control output
  */
 function log(level, message, ...args) {
     const settings = extension_settings.userExpressions || {};
-    const currentLevel = settings.logLevel !== undefined ? settings.logLevel : LOG_LEVELS.INFO;
     
-    if (level > currentLevel) return;
+    if (level > CURRENT_LOG_LEVEL) return;
     
     const levelNames = ['ERROR', 'WARN', 'INFO', 'DEBUG', 'VERBOSE'];
     const prefix = `[${MODULE_NAME}] [${levelNames[level]}]`;
@@ -77,7 +77,8 @@ const DEFAULT_SETTINGS = {
     personaFolderMap: {},
     currentExpression: {},
     simulateStreaming: false,
-    streamSpeed: 50
+    streamSpeed: 50,
+    streamDelay: 0
 };
 
 // State
@@ -349,32 +350,10 @@ async function updateUI() {
     
     logger.debug('Updating UI for persona:', personaName);
     
-    // Update persona name display
-    const personaInfo = document.querySelector('#user-expressions-persona-info .persona-name');
-    if (personaInfo) {
-        personaInfo.textContent = personaName;
-    }
-    
-    // Update current expression preview
-    const currentExpression = getCurrentExpression();
-    const previewContainer = document.getElementById('user-expressions-current-preview');
-    const previewImg = previewContainer?.querySelector('img');
-    
-    if (previewContainer && previewImg && currentExpression && folderName) {
-        // Fetch sprites to get the image path
-        if (!spriteCache[folderName]) {
-            spriteCache[folderName] = await getSpritesList(folderName);
-        }
-        
-        const expressionData = spriteCache[folderName]?.find(e => e.label === currentExpression);
-        if (expressionData?.files?.length > 0) {
-            previewImg.src = expressionData.files[0].path;
-            previewContainer.classList.remove('hidden');
-        } else {
-            previewContainer.classList.add('hidden');
-        }
-    } else if (previewContainer) {
-        previewContainer.classList.add('hidden');
+    // Update persona name display in the sprite header
+    const personaNameSpan = document.getElementById('user-expressions-persona-name');
+    if (personaNameSpan) {
+        personaNameSpan.textContent = personaName;
     }
     
     // Update sprite list
@@ -424,14 +403,41 @@ async function updateSpriteList() {
 
     container.innerHTML = listItems.join('');
 
-    // Add click handlers for set buttons
-    container.querySelectorAll('.expression_list_set').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const item = btn.closest('.user-expression-item');
+    // Add click handlers for expression items (to set the expression)
+    container.querySelectorAll('.expression_list_item').forEach(item => {
+        item.addEventListener('click', async (e) => {
+            // Don't trigger if clicking on buttons
+            if (e.target.closest('.expression_list_buttons')) return;
+            
             const expression = item.dataset.expression;
             await setUserExpression(expression);
             await updateUI();
+        });
+    });
+
+    // Add click handlers for upload buttons
+    container.querySelectorAll('.expression_list_upload').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const item = btn.closest('.expression_list_item');
+            const expression = item.dataset.expression;
+            
+            // Create a temporary file input for this expression
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                logger.info('Uploading file for expression:', expression);
+                const success = await uploadSprite(file, expression);
+                if (success) {
+                    await updateUI();
+                    logger.info('Successfully uploaded:', expression);
+                }
+            };
+            input.click();
         });
     });
 
@@ -439,7 +445,7 @@ async function updateSpriteList() {
     container.querySelectorAll('.expression_list_delete').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const item = btn.closest('.user-expression-item');
+            const item = btn.closest('.expression_list_item');
             const expression = item.dataset.expression;
             const fileName = item.dataset.filename;
 
@@ -521,8 +527,9 @@ async function initSettingsPanel() {
 
     // Streaming settings
     const streamingCheckbox = document.getElementById('user-expressions-simulate-streaming');
-    const streamSpeedControl = document.getElementById('stream-speed-control');
+    const streamControls = document.getElementById('stream-controls');
     const streamSpeedSelect = document.getElementById('user-expressions-stream-speed');
+    const streamDelayInput = document.getElementById('user-expressions-stream-delay');
 
     if (streamingCheckbox) {
         streamingCheckbox.checked = settings.simulateStreaming || false;
@@ -530,9 +537,9 @@ async function initSettingsPanel() {
             settings.simulateStreaming = e.target.checked;
             saveSettingsDebounced();
             logger.info('Simulate streaming:', settings.simulateStreaming);
-            // Show/hide stream speed control
-            if (streamSpeedControl) {
-                streamSpeedControl.classList.toggle('hidden', !e.target.checked);
+            // Show/hide stream controls
+            if (streamControls) {
+                streamControls.classList.toggle('hidden', !e.target.checked);
             }
         });
     }
@@ -544,10 +551,20 @@ async function initSettingsPanel() {
             saveSettingsDebounced();
             logger.info('Stream speed:', settings.streamSpeed);
         });
-        // Show/hide based on current setting
-        if (streamSpeedControl) {
-            streamSpeedControl.classList.toggle('hidden', !settings.simulateStreaming);
-        }
+    }
+
+    if (streamDelayInput) {
+        streamDelayInput.value = String(settings.streamDelay || 0);
+        streamDelayInput.addEventListener('change', (e) => {
+            settings.streamDelay = parseInt(e.target.value) || 0;
+            saveSettingsDebounced();
+            logger.info('Stream delay:', settings.streamDelay);
+        });
+    }
+
+    // Show/hide stream controls based on current setting
+    if (streamControls) {
+        streamControls.classList.toggle('hidden', !settings.simulateStreaming);
     }
 
     // Upload button
