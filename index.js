@@ -20,6 +20,15 @@ const MODULE_NAME = 'user-expressions';
 // Extension path for templates
 const extension_path = `scripts/extensions/third-party/${MODULE_NAME}`;
 
+/**
+ * Check if we're in Visual Novel mode
+ * Matches the logic in expressions extension
+ */
+function isVisualNovelMode() {
+    const context = getContext();
+    return Boolean(!context.isMobile() && context.powerUserSettings?.waifuMode);
+}
+
 // Log levels
 const LOG_LEVELS = {
     ERROR: 0,
@@ -259,8 +268,135 @@ async function deleteSprite(label, fileName) {
 }
 
 /**
+ * Toggle between user and character expression based on last message
+ */
+function toggleExpressionVisibility() {
+    if (isVisualNovelMode()) return; // Only handle non-VN mode
+    
+    const context = getContext();
+    const lastMessage = context.chat[context.chat.length - 1];
+    
+    if (!lastMessage) return;
+    
+    const charHolder = document.getElementById('expression-holder');
+    const userHolder = document.getElementById('user-expression-holder');
+    
+    if (!charHolder || !userHolder) return;
+    
+    if (lastMessage.is_user) {
+        // Last message is from user - show user expression, hide character
+        charHolder.classList.add('hidden');
+        userHolder.classList.remove('hidden');
+    } else {
+        // Last message is from character - show character expression, hide user
+        charHolder.classList.remove('hidden');
+        userHolder.classList.add('hidden');
+    }
+}
+
+/**
+ * Create or get the user expression holder with completely unique structure
+ */
+function createUserExpressionHolder() {
+    const context = getContext();
+    const vnMode = isVisualNovelMode();
+    
+    // Check if holder already exists
+    let holder = document.getElementById('user-expression-holder');
+    
+    if (!holder) {
+        // Create holder from scratch with unique structure
+        holder = document.createElement('div');
+        holder.id = 'user-expression-holder';
+        holder.setAttribute('data-avatar', 'user-persona');
+        holder.setAttribute('data-user-expression', 'true');
+        
+        // Create drag handle
+        const dragHandle = document.createElement('div');
+        dragHandle.className = 'drag-grabber fa-solid fa-grip';
+        dragHandle.id = 'user-expression-holderheader';
+        
+        // Create image element with UNIQUE class
+        const img = document.createElement('img');
+        img.id = 'user-expression-image';
+        
+        holder.appendChild(dragHandle);
+        holder.appendChild(img);
+        
+        if (vnMode) {
+            // In VN mode, append to visual-novel-wrapper
+            $('#visual-novel-wrapper').append(holder);
+        } else {
+            // In regular mode, append directly to body
+            $('body').append(holder);
+        }
+        
+        // Make it draggable
+        if (typeof dragElement === 'function') {
+            dragElement($(holder));
+        }
+        
+        logger.debug('Created user expression holder with unique structure');
+    }
+    
+    return holder;
+}
+
+/**
+ * Initialize user expression display with default expression
+ */
+async function initUserExpressionDisplay() {
+    const folderName = getCurrentPersonaFolder();
+    if (!folderName) {
+        return;
+    }
+    
+    // Check if user has any sprites
+    const sprites = await getSpritesList(folderName);
+    if (!sprites || sprites.length === 0) {
+        logger.debug('No user sprites found, skipping expression display initialization');
+        return;
+    }
+    
+    // Get default fallback expression (use 'joy' as default, matching expressions extension)
+    const defaultExpression = 'joy';
+    
+    // Try to find the default expression sprite
+    const defaultSprite = sprites.find(s => s.label.toLowerCase() === defaultExpression.toLowerCase());
+    
+    if (defaultSprite && defaultSprite.files.length > 0) {
+        const holder = createUserExpressionHolder();
+        if (!holder) {
+            return;
+        }
+        
+        const img = holder.querySelector('img');
+        img.id = 'user-expression-image';
+        img.src = defaultSprite.files[0].path;
+        img.setAttribute('data-expression', defaultExpression);
+        img.setAttribute('data-sprite-folder-name', folderName);
+        
+        // Set initial visibility based on last message
+        const context = getContext();
+        const lastMessage = context.chat[context.chat.length - 1];
+        if (lastMessage && lastMessage.is_user) {
+            holder.classList.remove('hidden');
+        } else {
+            holder.classList.add('hidden');
+        }
+        
+        // Store the current expression
+        const settings = extension_settings.userExpressions;
+        settings.currentExpression[folderName] = defaultExpression;
+        saveSettingsDebounced();
+        
+        logger.info('User expression initialized with default:', defaultExpression);
+    }
+}
+
+/**
  * Set expression for the current user persona
- * Uses the expressions extension's sendExpressionCall
+ * Updates the user expression holder
  */
 async function setUserExpression(expression) {
     const folderName = getCurrentPersonaFolder();
@@ -272,14 +408,46 @@ async function setUserExpression(expression) {
     logger.debug('Setting user expression:', { folder: folderName, expression });
     
     try {
-        await sendExpressionCall(folderName, expression, { force: true });
+        // Get sprites list for the user persona
+        const sprites = await getSpritesList(folderName);
+        
+        // Find matching sprite
+        let matchingSprite = sprites.find(s => s.label.toLowerCase() === expression.toLowerCase());
+        
+        // If no matching sprite found, try fallback to 'joy'
+        if (!matchingSprite) {
+            matchingSprite = sprites.find(s => s.label.toLowerCase() === 'joy');
+            if (matchingSprite) {
+                logger.debug('Expression not found, using fallback: joy');
+            }
+        }
+        
+        if (matchingSprite && matchingSprite.files.length > 0) {
+            const holder = createUserExpressionHolder();
+            if (!holder) {
+                return;
+            }
+            
+            const img = holder.querySelector('img');
+            
+            // Update the image
+            img.src = matchingSprite.files[0].path;
+            img.setAttribute('data-expression', expression);
+            img.setAttribute('data-sprite-folder-name', folderName);
+            
+            $(holder).removeClass('hidden');
+            $(holder).show();
+            
+            logger.info('User expression set:', expression);
+        } else {
+            logger.warn('No sprite found for expression:', expression);
+        }
         
         // Store the current expression
         const settings = extension_settings.userExpressions;
         settings.currentExpression[folderName] = expression;
         saveSettingsDebounced();
         
-        logger.info('User expression set:', expression);
     } catch (error) {
         logger.error('Error setting user expression:', error);
     }
@@ -603,6 +771,8 @@ async function init() {
     eventSource.on(event_types.PERSONA_CHANGED, async () => {
         logger.info('Persona changed, updating...');
         await updateUI();
+        // Reinitialize user expression display for new persona
+        await initUserExpressionDisplay();
     });
     
     // Listen for user message rendered
@@ -620,14 +790,65 @@ async function init() {
         if (message && message.mes && message.is_user) {
             logger.debug('Processing last user message:', message.mes.substring(0, 50));
             await handleUserMessage(message.mes);
+            // Toggle visibility after processing user message
+            toggleExpressionVisibility();
         }
     });
     
     // Listen for chat changes
-    eventSource.on(event_types.CHAT_CHANGED, () => {
+    eventSource.on(event_types.CHAT_CHANGED, async () => {
         logger.info('Chat changed, clearing state');
         lastUserMessage = null;
         isProcessing = false;
+        // Initialize user expression display when entering a chat
+        await initUserExpressionDisplay();
+        // Set initial visibility based on last message
+        toggleExpressionVisibility();
+    });
+    
+    // Listen for message rendered events to toggle expression visibility
+    // Only toggle if the rendered message is the last one
+    eventSource.on(event_types.MESSAGE_RENDERED, (messageId) => {
+        const context = getContext();
+        if (messageId === context.chat.length - 1) {
+            toggleExpressionVisibility();
+        }
+    });
+    
+    // Listen for character message received events
+    eventSource.on(event_types.MESSAGE_RECEIVED, (messageId) => {
+        const context = getContext();
+        // Only toggle if this is the last message
+        if (messageId === context.chat.length - 1) {
+            toggleExpressionVisibility();
+        }
+    });
+    
+    // Listen for message deleted events
+    eventSource.on(event_types.MESSAGE_DELETED, (messageId) => {
+        const context = getContext();
+        // Toggle if we deleted the last message or if the new last message is different
+        if (messageId >= context.chat.length - 1) {
+            toggleExpressionVisibility();
+        }
+    });
+    
+    // Listen for message updated events (includes edits)
+    eventSource.on(event_types.MESSAGE_UPDATED, (messageId) => {
+        const context = getContext();
+        // Only toggle if this is the last message
+        if (messageId === context.chat.length - 1) {
+            toggleExpressionVisibility();
+        }
+    });
+    
+    // Listen for swipe events to toggle expression visibility
+    eventSource.on(event_types.MESSAGE_SWIPED, (messageId) => {
+        const context = getContext();
+        // Only toggle if the swiped message is the last one
+        if (messageId === context.chat.length - 1) {
+            toggleExpressionVisibility();
+        }
     });
     
     // Initial UI update

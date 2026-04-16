@@ -168,9 +168,6 @@ async function startStreaming(messageId, fullMessage) {
         }
     }
 
-    // Show the existing stop button (it should already be visible during generation)
-    // We just need to make sure our hook is in place
-
     let currentText = '';
     let charIndex = 0;
     let lastClassificationTime = 0;
