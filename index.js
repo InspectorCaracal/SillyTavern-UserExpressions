@@ -38,7 +38,7 @@ const LOG_LEVELS = {
     VERBOSE: 4
 };
 
-const CURRENT_LOG_LEVEL = LOG_LEVELS.DEBUG;
+const CURRENT_LOG_LEVEL = LOG_LEVELS.WARN;
 
 /**
  * Debug logging utility
