@@ -2,9 +2,9 @@
 
 A SillyTavern extension that adds expression sprites for user personas, parallel to the existing Character Expressions extension.
 
-## NOTE
+## DEV NOTE
 
-I made this with Kimi and didn't bother to code review the result so who knows right. If you decide to go dig in, bring your favorite pasta sauce.
+I made this with Kimi and didn't bother to code review the result so who knows right. Didn't look too bad when I poked at it for a couple last fixes but enter at your own risk.
 
 ## Features
 
@@ -29,7 +29,7 @@ I made this with Kimi and didn't bother to code review the result so who knows r
    - Go to Extensions → User Expressions settings
    - Click "Upload Expression" and select an image
    - The filename becomes the expression label (e.g., `joy.png` → expression "joy")
-   - Sprites are stored in `characters/__user__{PersonaName}/`
+   - Sprites are stored in `characters/__persona__{PersonaName}/`
 
 ### Settings
 
@@ -49,19 +49,19 @@ I made this with Kimi and didn't bother to code review the result so who knows r
 1. When you send a message, the extension classifies it using the same method as character expressions (LLM/Extras/Local)
 2. The expression is set using `sendExpressionCall()` from the expressions extension
 3. Expressions appear in the regular expressions panel alongside character expressions
-4. Each persona has isolated expression folders using the naming pattern: `__user__{PersonaName}`
+4. Each persona has isolated expression folders using the naming pattern: `__persona__{PersonaName}`
 
 ### File Storage
 
 Expression sprites are stored in the characters directory:
 ```
 data/default-user/characters/
-├── __user__MyPersona/
+├── __persona__MyPersona/
 │   ├── joy.png
 │   ├── sadness.png
 │   ├── anger.png
 │   └── neutral.png
-└── __user__AnotherPersona/
+└── __persona__AnotherPersona/
     ├── happy.png
     └── serious.png
 ```
@@ -111,6 +111,6 @@ This extension relies on the built-in Expressions extension and uses:
 
 ## Technical Notes
 
-- Persona folders are prefixed with `__user__` to avoid collisions with real characters
+- Persona folders are prefixed with `__persona__` to avoid collisions with real characters
 - The extension automatically creates folders on first upload
 - Expression classification uses the same settings as character expressions

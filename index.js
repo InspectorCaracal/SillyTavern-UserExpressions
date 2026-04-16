@@ -113,13 +113,13 @@ function initSettings() {
 
 /**
  * Get the folder name for a persona
- * Uses __user__ prefix to distinguish from characters
+ * Uses __persona__ prefix to distinguish from characters
  */
 function getPersonaFolderName(personaName) {
     if (!personaName) return null;
     // Sanitize the name to be filesystem-safe
     const sanitized = personaName.replace(/[^a-zA-Z0-9_-]/g, '_');
-    return `__user__${sanitized}`;
+    return `__persona__${sanitized}`;
 }
 
 /**
