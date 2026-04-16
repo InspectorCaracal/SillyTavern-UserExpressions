@@ -1,14 +1,9 @@
-/* User Expression Holder - completely separate from character expressions */
-#user-expression-holder {
+/* User Expression Holder - class used for both modes */
+.user-expression-holder {
     min-width: 100px;
     min-height: 100px;
     max-height: 90vh;
     max-width: 90vh;
-    width: calc((100vw - var(--sheldWidth)) / 2);
-    position: fixed;
-    bottom: 0;
-    padding: 0;
-    left: 0;
     filter: drop-shadow(2px 2px 2px #51515199);
     z-index: 2;
     overflow: hidden;
@@ -18,11 +13,55 @@
     background: transparent;
 }
 
-#user-expression-holder.hidden {
+.user-expression-holder.hidden {
     display: none !important;
 }
 
-#user-expression-holder .drag-grabber {
+body.waifuMode #expression-wrapper {
+    width: 50vw !important;
+    position: fixed;
+    right: 10vw;
+}
+body.waifuMode #visual-novel-wrapper {
+    width: 50vw;
+    position: fixed;
+}
+
+/* Non-VN Mode Wrapper */
+#user-expression-wrapper {
+    width: calc((100vw - var(--sheldWidth)) / 2);
+    position: fixed;
+    bottom: 0;
+    padding: 0;
+    left: 0;
+}
+
+#user-expression-wrapper .user-expression-holder {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+/* VN Mode Wrapper */
+#user-expression-vn-wrapper {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    height: calc(100vh - var(--topBarBlockSize));
+    z-index: 2;
+    overflow: visible;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    pointer-events: none;
+}
+
+#user-expression-vn-wrapper .user-expression-holder {
+    position: relative;
+    pointer-events: auto;
+}
+
+.user-expression-holder .drag-grabber {
     position: absolute;
     top: 0;
     left: 0;
@@ -33,11 +72,11 @@
     opacity: 0.5;
 }
 
-#user-expression-holder .drag-grabber:hover {
+.user-expression-holder .drag-grabber:hover {
     opacity: 1;
 }
 
-#user-expression-image {
+.user-expression-image {
     min-width: 100px;
     min-height: 100px;
     max-height: 90vh;
@@ -49,7 +88,7 @@
     object-fit: contain;
 }
 
-#user-expression-image[src=""] {
+.user-expression-image[src=""] {
     visibility: hidden;
 }
 

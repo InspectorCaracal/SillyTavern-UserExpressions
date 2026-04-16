@@ -38,7 +38,7 @@ const LOG_LEVELS = {
     VERBOSE: 4
 };
 
-const CURRENT_LOG_LEVEL = LOG_LEVELS.INFO;
+const CURRENT_LOG_LEVEL = LOG_LEVELS.DEBUG;
 
 /**
  * Debug logging utility
@@ -271,77 +271,377 @@ async function deleteSprite(label, fileName) {
  * Toggle between user and character expression based on last message
  */
 function toggleExpressionVisibility() {
-    if (isVisualNovelMode()) return; // Only handle non-VN mode
-    
     const context = getContext();
     const lastMessage = context.chat[context.chat.length - 1];
     
     if (!lastMessage) return;
     
     const charHolder = document.getElementById('expression-holder');
-    const userHolder = document.getElementById('user-expression-holder');
+    const regularUserHolder = document.querySelector('#user-expression-wrapper .user-expression-holder');
+    const vnUserHolder = document.querySelector('#user-expression-vn-wrapper .user-expression-holder');
     
-    if (!charHolder || !userHolder) return;
-    
-    if (lastMessage.is_user) {
-        // Last message is from user - show user expression, hide character
-        charHolder.classList.add('hidden');
-        userHolder.classList.remove('hidden');
+    if (isVisualNovelMode()) {
+        // In VN mode, show VN holder, hide regular holder
+        if (regularUserHolder) regularUserHolder.classList.add('hidden');
+        if (vnUserHolder) {
+            vnUserHolder.classList.remove('hidden');
+            if (charHolder) charHolder.classList.remove('hidden');
+            updateVNUserPosition();
+        }
     } else {
-        // Last message is from character - show character expression, hide user
-        charHolder.classList.remove('hidden');
-        userHolder.classList.add('hidden');
+        // In non-VN mode, show regular holder, hide VN holder
+        if (vnUserHolder) vnUserHolder.classList.add('hidden');
+        
+        if (lastMessage.is_user) {
+            // Last message is from user
+            if (charHolder) charHolder.classList.add('hidden');
+            if (regularUserHolder) regularUserHolder.classList.remove('hidden');
+        } else {
+            // Last message is from character
+            if (charHolder) charHolder.classList.remove('hidden');
+            if (regularUserHolder) regularUserHolder.classList.add('hidden');
+        }
+    }
+}
+
+/**
+ * VN Mode positioning and management
+ */
+let vnObserver = null;
+
+/**
+ * Get z-index for user expression based on message recency (matching core logic)
+ */
+function calculateUserZIndex() {
+    const context = getContext();
+    const group = context.groups.find(x => x.id == context.groupId);
+    if (!group) return 0;
+    
+    const filteredMembers = group.members.filter(x => !group.disabled_members.includes(x));
+    const recentMessages = context.chat.map(x => x.original_avatar).filter(x => x).reverse().filter((v, i, a) => a.indexOf(v) === i);
+    
+    // Find user's position in recency
+    const userAvatar = 'user-persona';
+    const userRecentIndex = recentMessages.indexOf(userAvatar);
+    
+    // Build layer indices same as core
+    const layerIndices = filteredMembers.slice().sort((a, b) => {
+        const aRecentIndex = recentMessages.indexOf(a);
+        const bRecentIndex = recentMessages.indexOf(b);
+        const aFilteredIndex = filteredMembers.indexOf(a);
+        const bFilteredIndex = filteredMembers.indexOf(b);
+        
+        if (aRecentIndex !== -1 && bRecentIndex !== -1) {
+            return bRecentIndex - aRecentIndex;
+        } else if (aRecentIndex !== -1) {
+            return 1;
+        } else if (bRecentIndex !== -1) {
+            return -1;
+        } else {
+            return aFilteredIndex - bFilteredIndex;
+        }
+    });
+    
+    // User is treated as "most recent" if last message is from user
+    const lastMessage = context.chat[context.chat.length - 1];
+    if (lastMessage && lastMessage.is_user) {
+        return layerIndices.length; // Put user on top
+    }
+    
+    return layerIndices.indexOf(userAvatar);
+}
+
+/**
+ * Calculate and set widths for VN mode containers
+ * User sprite container gets width based on sprite size
+ * VN wrapper gets remaining viewport space
+ * Overlap is handled via negative margins, not container shrinking
+ */
+async function resizeVNContainers() {
+    const userWrapper = $('#user-expression-vn-wrapper');
+    const userHolder = $('#user-expression-vn-wrapper .user-expression-holder');
+    const vnWrapper = $('#visual-novel-wrapper');
+
+    if (!userWrapper.length || !userHolder.length || !vnWrapper.length) return;
+
+    const viewportWidth = $(window).width();
+
+    // Wait for user sprite image to load
+    const userImg = userHolder.find('.user-expression-image')[0];
+    if (userImg instanceof HTMLImageElement && !userImg.complete) {
+        await new Promise(resolve => userImg.addEventListener('load', resolve, { once: true }));
+    }
+
+    // Get user sprite width after image is loaded
+    const userWidth = userHolder.width();
+
+    // Get character sprites and wait for their images to load
+    const charSprites = vnWrapper.find('.expression-holder:not([data-user-expression="true"])');
+    const charImages = charSprites.find('img.expression');
+
+    // Wait for all character images to load
+    await Promise.all(Array.from(charImages).map(img => {
+        if (img instanceof HTMLImageElement && !img.complete) {
+            return new Promise(resolve => img.addEventListener('load', resolve, { once: true }));
+        }
+        return Promise.resolve();
+    }));
+
+    // Wait for core extension's layout animation to complete (500ms + buffer)
+    await new Promise(resolve => setTimeout(resolve, 600));
+
+    // Get character sprite widths after images are loaded and positioned
+    let totalCharWidth = 0;
+    charSprites.each(function () {
+        totalCharWidth += $(this).width();
+        logger.debug(`Adding ${$(this).width()}, total character width so far is ${totalCharWidth}`);
+    });
+
+    // Calculate total needed width
+    const totalNeeded = userWidth + totalCharWidth;
+
+    // Set container widths to full sprite sizes
+    let userContainerWidth = userWidth;
+    let vnContainerWidth;
+
+    // Calculate overlap for positioning
+    let overlapOffset = 0;
+    if (totalNeeded > viewportWidth) {
+        const totalOverlap = totalNeeded - viewportWidth;
+        // User sprite overlap amount
+        const userOverlap = (userWidth / totalNeeded) * totalOverlap;
+        overlapOffset = userOverlap; // Negative margin for overlap
+    }
+    logger.debug(`Offset is ${overlapOffset}, viewport is ${viewportWidth}, user width is ${userWidth}`);
+
+    vnContainerWidth = (viewportWidth - userWidth) + overlapOffset;
+    // Set container widths
+    userWrapper.css('width', userContainerWidth + 'px');
+    vnWrapper.css({
+        'width': vnContainerWidth + 'px',
+        'right': '0px',
+        'position': 'fixed'
+    });
+
+    // Center user sprite in its container
+    const userSprite = userHolder.find('.user-expression-image');
+    const spriteWidth = userSprite.width() || userWidth;
+    const centeredPosition = (userContainerWidth - spriteWidth) / 2;
+
+    return {
+        userWidth: userContainerWidth,
+        vnWidth: vnContainerWidth,
+        userPosition: centeredPosition,
+        overlap: overlapOffset
+    };
+}
+
+/**
+ * Calculate position for user expression in VN mode
+ */
+function calculateVNUserPosition() {
+    const userWrapper = $('#user-expression-vn-wrapper');
+    const userHolder = $('#user-expression-vn-wrapper .user-expression-holder');
+    
+    if (!userWrapper.length || !userHolder.length) return null;
+    
+    // Get current dimensions
+    const wrapperWidth = userWrapper.width();
+    const userSprite = userHolder.find('.user-expression-image');
+    const spriteWidth = userSprite.width() || userHolder.width();
+    
+    // Center the sprite in its container
+    const userPosition = (wrapperWidth - spriteWidth) / 2;
+    
+    // Calculate z-index
+    const zIndex = calculateUserZIndex();
+    
+    return {
+        position: userPosition,
+        zIndex: zIndex,
+        width: spriteWidth
+    };
+}
+
+/**
+ * Update VN mode user expression position and styling
+ */
+async function updateVNUserPosition() {
+    if (!isVisualNovelMode()) return;
+    
+    const userHolder = $('#user-expression-vn-wrapper .user-expression-holder');
+    if (!userHolder.length) return;
+    
+    // Check if user has dragged the element manually
+    if (userHolder.data('dragged')) return;
+    
+    // First resize containers based on sprite dimensions
+    const containerData = await resizeVNContainers();
+    if (!containerData) return;
+    
+    // Then calculate and apply position
+    const positionData = calculateVNUserPosition();
+    if (!positionData) return;
+    
+    // Apply position with animation (matching core: 500ms)
+    const context = getContext();
+    const reducedMotion = context.powerUserSettings?.reduced_motion;
+    
+    if (reducedMotion) {
+        userHolder.css({
+            'left': positionData.position + 'px',
+            'z-index': positionData.zIndex
+        });
+    } else {
+        userHolder.animate({
+            'left': positionData.position + 'px'
+        }, 500);
+        userHolder.css('z-index', positionData.zIndex);
+    }
+    
+    userHolder.show();
+}
+
+/**
+ * Setup MutationObserver for VN mode
+ */
+async function setupVNObserver() {
+    if (vnObserver) {
+        vnObserver.disconnect();
+        vnObserver = null;
+    }
+    
+    if (!isVisualNovelMode()) return;
+    
+    const vnWrapper = document.getElementById('visual-novel-wrapper');
+    if (!vnWrapper) return;
+    
+    vnObserver = new MutationObserver((mutations) => {
+        let shouldUpdate = false;
+        
+        for (const mutation of mutations) {
+            // Check if expression holders were added/removed
+            if (mutation.type === 'childList') {
+                const addedNodes = Array.from(mutation.addedNodes);
+                const removedNodes = Array.from(mutation.removedNodes);
+                
+                // Check if any expression holders were affected
+                const hasExpressionHolderChanges = 
+                    addedNodes.some(node => node.classList?.contains('expression-holder')) ||
+                    removedNodes.some(node => node.classList?.contains('expression-holder'));
+                
+                if (hasExpressionHolderChanges) {
+                    shouldUpdate = true;
+                    break;
+                }
+            }
+            
+            // Check if style/position changed on character sprites
+            if (mutation.type === 'attributes' && 
+                mutation.attributeName === 'style' &&
+                mutation.target.classList?.contains('expression-holder') &&
+                !mutation.target.hasAttribute('data-user-expression')) {
+                shouldUpdate = true;
+                break;
+            }
+        }
+        
+        if (shouldUpdate) {
+            // Small delay to let core extension finish its updates
+            setTimeout(() => updateVNUserPosition(), 50);
+        }
+    });
+    
+    vnObserver.observe(vnWrapper, {
+        childList: true,
+        attributes: true,
+        attributeFilter: ['style', 'class'],
+        subtree: false
+    });
+    
+    // Initial position update
+    await updateVNUserPosition();
+}
+
+/**
+ * Cleanup VN mode observer
+ */
+function cleanupVNObserver() {
+    if (vnObserver) {
+        vnObserver.disconnect();
+        vnObserver = null;
     }
 }
 
 /**
  * Create or get the user expression holder with completely unique structure
  */
-function createUserExpressionHolder() {
+function createUserExpressionHolders() {
     const context = getContext();
-    const vnMode = isVisualNovelMode();
     
-    // Check if holder already exists
-    let holder = document.getElementById('user-expression-holder');
-    
-    if (!holder) {
-        // Create holder from scratch with unique structure
-        holder = document.createElement('div');
-        holder.id = 'user-expression-holder';
-        holder.setAttribute('data-avatar', 'user-persona');
-        holder.setAttribute('data-user-expression', 'true');
+    // Create non-VN mode wrapper and holder
+    let regularWrapper = document.getElementById('user-expression-wrapper');
+    if (!regularWrapper) {
+        regularWrapper = document.createElement('div');
+        regularWrapper.id = 'user-expression-wrapper';
+        document.body.appendChild(regularWrapper);
         
-        // Create drag handle
+        const regularHolder = document.createElement('div');
+        regularHolder.className = 'user-expression-holder';
+        regularHolder.setAttribute('data-avatar', 'user-persona');
+        regularHolder.setAttribute('data-user-expression', 'true');
+        
         const dragHandle = document.createElement('div');
         dragHandle.className = 'drag-grabber fa-solid fa-grip';
-        dragHandle.id = 'user-expression-holderheader';
         
-        // Create image element with UNIQUE class
         const img = document.createElement('img');
-        img.id = 'user-expression-image';
+        img.className = 'user-expression-image';
         
-        holder.appendChild(dragHandle);
-        holder.appendChild(img);
+        regularHolder.appendChild(dragHandle);
+        regularHolder.appendChild(img);
+        regularWrapper.appendChild(regularHolder);
         
-        if (vnMode) {
-            // In VN mode, append to visual-novel-wrapper
-            $('#visual-novel-wrapper').append(holder);
-        } else {
-            // In regular mode, append directly to body
-            $('body').append(holder);
-        }
-        
-        // Make it draggable
         if (typeof dragElement === 'function') {
-            dragElement($(holder));
+            dragElement($(regularHolder));
         }
         
-        logger.debug('Created user expression holder with unique structure');
+        logger.debug('Created regular mode user expression wrapper and holder');
     }
     
-    return holder;
+    // Create VN mode wrapper and holder
+    let vnWrapper = document.getElementById('user-expression-vn-wrapper');
+    if (!vnWrapper) {
+        vnWrapper = document.createElement('div');
+        vnWrapper.id = 'user-expression-vn-wrapper';
+        document.body.appendChild(vnWrapper);
+        
+        const vnHolder = document.createElement('div');
+        vnHolder.className = 'user-expression-holder';
+        vnHolder.setAttribute('data-avatar', 'user-persona');
+        vnHolder.setAttribute('data-user-expression', 'true');
+        
+        const dragHandle = document.createElement('div');
+        dragHandle.className = 'drag-grabber fa-solid fa-grip';
+        
+        const img = document.createElement('img');
+        img.className = 'user-expression-image';
+        
+        vnHolder.appendChild(dragHandle);
+        vnHolder.appendChild(img);
+        vnWrapper.appendChild(vnHolder);
+        
+        if (typeof dragElement === 'function') {
+            dragElement($(vnHolder));
+        }
+        
+        logger.debug('Created VN mode user expression wrapper and holder');
+    }
+    
+    // Return the holder for the current mode
+    return isVisualNovelMode() 
+        ? document.querySelector('#user-expression-vn-wrapper .user-expression-holder')
+        : document.querySelector('#user-expression-wrapper .user-expression-holder');
 }
-
 /**
  * Initialize user expression display with default expression
  */
@@ -365,24 +665,44 @@ async function initUserExpressionDisplay() {
     const defaultSprite = sprites.find(s => s.label.toLowerCase() === defaultExpression.toLowerCase());
     
     if (defaultSprite && defaultSprite.files.length > 0) {
-        const holder = createUserExpressionHolder();
-        if (!holder) {
-            return;
-        }
+        // Create/populate ALL user expression holders (both regular and VN mode)
+        createUserExpressionHolders(); // This creates both if they don't exist
         
-        const img = holder.querySelector('img');
-        img.id = 'user-expression-image';
-        img.src = defaultSprite.files[0].path;
-        img.setAttribute('data-expression', defaultExpression);
-        img.setAttribute('data-sprite-folder-name', folderName);
-        
-        // Set initial visibility based on last message
+        const allHolders = document.querySelectorAll('.user-expression-holder');
+        const isVNMode = isVisualNovelMode();
         const context = getContext();
         const lastMessage = context.chat[context.chat.length - 1];
-        if (lastMessage && lastMessage.is_user) {
-            holder.classList.remove('hidden');
-        } else {
-            holder.classList.add('hidden');
+        
+        allHolders.forEach(holder => {
+            const img = holder.querySelector('.user-expression-image');
+            if (img) {
+                img.src = defaultSprite.files[0].path;
+                img.setAttribute('data-expression', defaultExpression);
+                img.setAttribute('data-sprite-folder-name', folderName);
+            }
+            
+            // Set visibility based on mode and last message
+            const isVNHolder = holder.closest('#user-expression-vn-wrapper') !== null;
+            
+            if (isVNMode && isVNHolder) {
+                // In VN mode, show VN holder
+                holder.classList.remove('hidden');
+            } else if (!isVNMode && !isVNHolder) {
+                // In non-VN mode, toggle regular holder based on last message
+                if (lastMessage && lastMessage.is_user) {
+                    holder.classList.remove('hidden');
+                } else {
+                    holder.classList.add('hidden');
+                }
+            } else {
+                // Hide holders not for current mode
+                holder.classList.add('hidden');
+            }
+        });
+        
+        // Trigger position update for VN mode
+        if (isVNMode) {
+            setTimeout(updateVNUserPosition, 10);
         }
         
         // Store the current expression
@@ -423,20 +743,31 @@ async function setUserExpression(expression) {
         }
         
         if (matchingSprite && matchingSprite.files.length > 0) {
-            const holder = createUserExpressionHolder();
-            if (!holder) {
-                return;
+            // Update ALL user expression holders (both regular and VN mode)
+            const allHolders = document.querySelectorAll('.user-expression-holder');
+            allHolders.forEach(holder => {
+                const img = holder.querySelector('.user-expression-image');
+                if (img) {
+                    // Update the image
+                    img.src = matchingSprite.files[0].path;
+                    img.setAttribute('data-expression', expression);
+                    img.setAttribute('data-sprite-folder-name', folderName);
+                }
+                
+                // Only show if this is the holder for the current mode
+                const isVNHolder = holder.closest('#user-expression-vn-wrapper') !== null;
+                const isVNMode = isVisualNovelMode();
+                
+                if ((isVNMode && isVNHolder) || (!isVNMode && !isVNHolder)) {
+                    $(holder).removeClass('hidden');
+                    $(holder).show();
+                }
+            });
+            
+            // Update position if in VN mode
+            if (isVisualNovelMode()) {
+                await updateVNUserPosition();
             }
-            
-            const img = holder.querySelector('img');
-            
-            // Update the image
-            img.src = matchingSprite.files[0].path;
-            img.setAttribute('data-expression', expression);
-            img.setAttribute('data-sprite-folder-name', folderName);
-            
-            $(holder).removeClass('hidden');
-            $(holder).show();
             
             logger.info('User expression set:', expression);
         } else {
@@ -804,26 +1135,23 @@ async function init() {
         await initUserExpressionDisplay();
         // Set initial visibility based on last message
         toggleExpressionVisibility();
+        // Setup or cleanup VN observer based on mode
+        if (isVisualNovelMode()) {
+            setupVNObserver();
+        } else {
+            cleanupVNObserver();
+        }
     });
     
-    // Listen for message rendered events to toggle expression visibility
+    // Listen for character message rendered events to toggle expression visibility
     // Only toggle if the rendered message is the last one
-    eventSource.on(event_types.MESSAGE_RENDERED, (messageId) => {
+    eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (messageId) => {
         const context = getContext();
         if (messageId === context.chat.length - 1) {
             toggleExpressionVisibility();
         }
     });
-    
-    // Listen for character message received events
-    eventSource.on(event_types.MESSAGE_RECEIVED, (messageId) => {
-        const context = getContext();
-        // Only toggle if this is the last message
-        if (messageId === context.chat.length - 1) {
-            toggleExpressionVisibility();
-        }
-    });
-    
+
     // Listen for message deleted events
     eventSource.on(event_types.MESSAGE_DELETED, (messageId) => {
         const context = getContext();
@@ -832,7 +1160,7 @@ async function init() {
             toggleExpressionVisibility();
         }
     });
-    
+
     // Listen for message updated events (includes edits)
     eventSource.on(event_types.MESSAGE_UPDATED, (messageId) => {
         const context = getContext();
@@ -841,13 +1169,34 @@ async function init() {
             toggleExpressionVisibility();
         }
     });
-    
+
     // Listen for swipe events to toggle expression visibility
     eventSource.on(event_types.MESSAGE_SWIPED, (messageId) => {
         const context = getContext();
         // Only toggle if the swiped message is the last one
         if (messageId === context.chat.length - 1) {
             toggleExpressionVisibility();
+        }
+    });
+    
+    // Listen for settings updates to detect VN mode toggle
+    eventSource.on(event_types.SETTINGS_UPDATED, () => {
+        const context = getContext();
+        const isVNMode = context.powerUserSettings?.waifuMode;
+        logger.debug("Settings updated, VN mode:", isVNMode);
+        
+        if (isVNMode) {
+            setupVNObserver();
+        } else {
+            cleanupVNObserver();
+        }
+        toggleExpressionVisibility();
+    });
+    
+    // Listen for group updates (VN mode member changes)
+    eventSource.on(event_types.GROUP_UPDATED, async () => {
+        if (isVisualNovelMode()) {
+            await updateVNUserPosition();
         }
     });
     
@@ -867,6 +1216,11 @@ async function init() {
 
     // Set up send interception for streaming simulation
     setupSendInterception();
+
+    // Setup VN observer if already in VN mode
+    if (isVisualNovelMode()) {
+        setupVNObserver();
+    }
 
     logger.info('User Expressions extension initialized successfully');
 }
