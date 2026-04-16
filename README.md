@@ -12,13 +12,12 @@ I made this with Kimi and didn't bother to code review the result so who knows r
 - **Automatic Expression Classification**: Messages are automatically classified and expressions updated
 - **Manual Expression Control**: Set expressions manually via UI or slash commands
 - **Full Upload Support**: Upload expressions directly through the UI
-- **Integration with Expressions Extension**: Uses the same display mechanism as character expressions
+- **Integration with Expressions Extension**: Uses equivalent display mechanisms as the core extension.
+- **"Streamed" user messages**: Simulates the streaming effect on your own user messages so you can enjoy the shifting expressions!
 
 ## Installation
 
-1. Copy the `user-expressions` folder to `public/scripts/extensions/`
-2. Restart SillyTavern
-3. Enable the extension in the Extensions panel
+Copy the git repo URL here and add it in the Extensions panel, as usual.
 
 ## Usage
 
@@ -36,7 +35,9 @@ I made this with Kimi and didn't bother to code review the result so who knows r
 - **Enable User Expressions**: Turn the extension on/off
 - **Show expressions on user messages**: Display expressions in the chat interface
 - **Auto-update expression on new messages**: Automatically classify and update expressions when you send messages
-- **Debug Log Level**: Control the verbosity of console output (Error → Verbose)
+- **Simulate streaming on user messages**: Render the message you sent as if it's an incoming stream. Toggling on exposes two additional settings:
+  - *Stream Speed*: Determines how quickly the message appears.
+  - *Generation delay*: Adds a brief delay after the user "stream" finishes before kicking off the reply generation.
 
 ### Slash Commands
 
@@ -64,24 +65,6 @@ data/default-user/characters/
 └── __persona__AnotherPersona/
     ├── happy.png
     └── serious.png
-```
-
-## Debug Logging
-
-The extension includes a configurable logging system to help with debugging:
-
-```javascript
-// Log levels (0-4)
-0 = ERROR   // Only errors
-1 = WARN    // Errors and warnings
-2 = INFO    // General info (default)
-3 = DEBUG   // Detailed debug info
-4 = VERBOSE // Everything including low-level operations
-```
-
-Set via the settings panel or programmatically:
-```javascript
-extension_settings.userExpressions.logLevel = 3; // DEBUG
 ```
 
 ## Integration with Expressions Extension
